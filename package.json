@@ -1,0 +1,16 @@
+{
+  "name": "script-taskrouter-bulk-workers",
+  "version": "1.0.0",
+  "description": "Script to create, update, and delete TaskRouter workers based on a CSV file",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Terence Rogers (Twilio)",
+  "license": "MIT",
+  "dependencies": {
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.0.0",
+    "twilio": "^3.76.0"
+  }
+}
