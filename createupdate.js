@@ -91,8 +91,6 @@ async function createWorkers(workersToCreate, workersToLoad) {
   const filteredWorkers = workersToLoad.filter(w => workersToCreate.includes(w.friendlyName));
 
   for (let i = 0; i < filteredWorkers.length; i++) {
-    await sleep(1000);
-
     const worker = filteredWorkers[i];
     const {
       agent_attribute_1,
@@ -180,8 +178,6 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
   }
 
   for (let i = 0; i < filteredWorkers.length; i++) {
-    await sleep(1000);
-
     const worker = filteredWorkers[i];
     const {
       agent_attribute_1,
