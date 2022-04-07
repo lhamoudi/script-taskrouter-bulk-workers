@@ -26,10 +26,12 @@ function escapeNonAlphaChars(stringToEscape, prefix = '_') {
 }
 
 async function getExistingWorkers() {//Go get existing Workers
+  console.log('Fetching all existing workers');
   client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
     .workers
     .list()
     .then(workers => {
+      console.log('Workers fetched. Loading CSV');
       loadCSV(workers)
     });
 }
