@@ -99,7 +99,9 @@ async function createWorkers(workersToCreate, workersToLoad) {
       full_name,
       location,
       manager,
-      skills
+      skills,
+      team_id,
+      team_name
     } = worker;
 
     const routing = {
@@ -123,7 +125,9 @@ async function createWorkers(workersToCreate, workersToLoad) {
       full_name,
       location,
       manager,
-      routing
+      routing,
+      team_id,
+      team_name
     };
 
     try {
@@ -167,6 +171,8 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
       || existingAttributes.location !== w.location
       || existingAttributes.manager !== w.manager
       || !isArraysEqual(existingSkills, newSkills)
+      || existingAttributes.team_id !== w.team_id
+      || existingAttributes.team_name !== w.team_name
     );
   });
 
@@ -186,7 +192,9 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
       full_name,
       location,
       manager,
-      skills
+      skills,
+      team_id,
+      team_name
     } = worker;
 
     const routing = {
@@ -214,7 +222,9 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
       full_name,
       location,
       manager,
-      routing
+      routing,
+      team_id,
+      team_name
     };
 
     try {
