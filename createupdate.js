@@ -160,7 +160,7 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const existingAttributes = JSON.parse(existingWorker.attributes);
 
     const existingSkills = existingAttributes.routing && existingAttributes.routing.skills;
-    const newSkills = w.routing && w.routing.skills;
+    const newSkills = w.skills && w.skills.split(',');
 
     return (existingAttributes.contact_uri !== escapeNonAlphaChars(w.friendlyName)
       || existingAttributes.agent_attribute_1 !== w.agent_attribute_1
