@@ -25,11 +25,15 @@ function escapeNonAlphaChars(stringToEscape, prefix = '_') {
   return escaped;
 }
 
+function generateContactUri(friendlyName) {
+  return `client:${escapeNonAlphaChars(friendlyName)}`;
+}
+
 async function getExistingWorkers() {//Go get existing Workers
   console.log('Fetching all existing workers');
   client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
     .workers
-    .list()
+    .list({ pageSize: 1000 })
     .then(workers => {
       console.log('Workers fetched. Loading CSV');
       loadCSV(workers)
@@ -96,6 +100,7 @@ async function createWorkers(workersToCreate, workersToLoad) {
     const worker = filteredWorkers[i];
     const {
       agent_attribute_1,
+      date_joined,
       email,
       friendlyName,
       full_name,
@@ -120,9 +125,14 @@ async function createWorkers(workersToCreate, workersToLoad) {
       }
     }
 
+    const dateJoined = isNaN(parseInt(date_joined))
+      ? undefined
+      : parseInt(date_joined);
+
     const workerAttributes = {
       agent_attribute_1,
-      contact_uri: escapeNonAlphaChars(friendlyName),
+      contact_uri: generateContactUri(friendlyName),
+      date_joined: dateJoined,
       email,
       full_name,
       location,
@@ -164,10 +174,15 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const existingAttributes = JSON.parse(existingWorker.attributes);
 
     const existingSkills = existingAttributes.routing && existingAttributes.routing.skills;
-    const newSkills = w.skills && w.skills.split(',');
+    const newSkills = (w.skills && w.skills.split(',')) || [];
 
-    return (existingAttributes.contact_uri !== escapeNonAlphaChars(w.friendlyName)
+    const dateJoined = isNaN(parseInt(w.date_joined))
+      ? undefined
+      : parseInt(w.date_joined);
+
+    return (existingAttributes.contact_uri !== generateContactUri(w.friendlyName)
       || existingAttributes.agent_attribute_1 !== w.agent_attribute_1
+      || existingAttributes.date_joined !== dateJoined
       || existingAttributes.email !== w.email
       || existingAttributes.full_name !== w.full_name
       || existingAttributes.location !== w.location
@@ -189,6 +204,7 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const worker = filteredWorkers[i];
     const {
       agent_attribute_1,
+      date_joined,
       email,
       friendlyName,
       full_name,
@@ -212,6 +228,10 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
         routing.levels[skill] = 1
       }
     }
+
+    const dateJoined = isNaN(parseInt(date_joined))
+      ? undefined
+      : parseInt(date_joined);
     
     const existingWorker = existingWorkers.find(w => w.friendlyName === friendlyName);
     const existingAttributes = JSON.parse(existingWorker.attributes);
@@ -219,7 +239,8 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const workerAttributes = {
       ...existingAttributes,
       agent_attribute_1,
-      contact_uri: escapeNonAlphaChars(friendlyName),
+      contact_uri: generateContactUri(friendlyName),
+      date_joined: dateJoined,
       email,
       full_name,
       location,
