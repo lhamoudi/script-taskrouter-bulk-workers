@@ -101,6 +101,7 @@ async function createWorkers(workersToCreate, workersToLoad) {
     const {
       agent_attribute_1,
       date_joined,
+      date_left,
       email,
       friendlyName,
       full_name,
@@ -111,12 +112,14 @@ async function createWorkers(workersToCreate, workersToLoad) {
       team_name
     } = worker;
 
-    const routing = {
-      skills: [],
-      levels: {}
-    };
+    let routing;
 
     if (skills) {
+      routing = {
+        skills: [],
+        levels: {}
+      };
+
       const skillsArray = skills.split(',');
 
       for (const skill of skillsArray) {
@@ -129,10 +132,15 @@ async function createWorkers(workersToCreate, workersToLoad) {
       ? undefined
       : parseInt(date_joined);
 
+    const dateLeft = isNaN(parseInt(date_left))
+      ? undefined
+      : parseInt(date_left);
+
     const workerAttributes = {
       agent_attribute_1,
       contact_uri: generateContactUri(friendlyName),
       date_joined: dateJoined,
+      date_left: dateLeft,
       email,
       full_name,
       location,
@@ -174,22 +182,26 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const existingAttributes = JSON.parse(existingWorker.attributes);
 
     const existingSkills = existingAttributes.routing && existingAttributes.routing.skills;
-    const newSkills = (w.skills && w.skills.split(',')) || [];
+    const newSkills = w.skills && w.skills.split(',');
 
     const dateJoined = isNaN(parseInt(w.date_joined))
       ? undefined
       : parseInt(w.date_joined);
 
-    return (existingAttributes.contact_uri !== generateContactUri(w.friendlyName)
-      || existingAttributes.agent_attribute_1 !== w.agent_attribute_1
-      || existingAttributes.date_joined !== dateJoined
-      || existingAttributes.email !== w.email
-      || existingAttributes.full_name !== w.full_name
-      || existingAttributes.location !== w.location
-      || existingAttributes.manager !== w.manager
-      || !isArraysEqual(existingSkills, newSkills)
-      || existingAttributes.team_id !== w.team_id
-      || existingAttributes.team_name !== w.team_name
+    const dateLeft = isNaN(parseInt(w.date_left))
+      ? undefined
+      : parseInt(w.date_left);
+
+    return (w.agent_attribute_1 && existingAttributes.agent_attribute_1 !== w.agent_attribute_1
+      || dateJoined && existingAttributes.date_joined !== dateJoined
+      || dateLeft && existingAttributes.date_left !== dateLeft
+      || w.email && existingAttributes.email !== w.email
+      || w.full_name && existingAttributes.full_name !== w.full_name
+      || w.location && existingAttributes.location !== w.location
+      || w.manager && existingAttributes.manager !== w.manager
+      || newSkills && !isArraysEqual(existingSkills, newSkills)
+      || w.team_id && existingAttributes.team_id !== w.team_id
+      || w.team_name && existingAttributes.team_name !== w.team_name
     );
   });
 
@@ -205,6 +217,7 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const {
       agent_attribute_1,
       date_joined,
+      date_left,
       email,
       friendlyName,
       full_name,
@@ -215,12 +228,14 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
       team_name
     } = worker;
 
-    const routing = {
-      skills: [],
-      levels: {}
-    };
+    let routing;
 
     if (skills) {
+      routing = {
+        skills: [],
+        levels: {}
+      };
+
       const skillsArray = skills.split(',');
 
       for (const skill of skillsArray) {
@@ -232,23 +247,37 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const dateJoined = isNaN(parseInt(date_joined))
       ? undefined
       : parseInt(date_joined);
+
+    const dateLeft = isNaN(parseInt(date_left))
+      ? undefined
+      : parseInt(date_left);
     
     const existingWorker = existingWorkers.find(w => w.friendlyName === friendlyName);
     const existingAttributes = JSON.parse(existingWorker.attributes);
 
-    const workerAttributes = {
-      ...existingAttributes,
+    const updatedAttributes = {
       agent_attribute_1,
-      contact_uri: generateContactUri(friendlyName),
       date_joined: dateJoined,
+      date_left: dateLeft,
       email,
       full_name,
       location,
       manager,
       routing,
+      state: dateLeft && 'Deleted',
       team_id,
       team_name
     };
+
+    const workerAttributes = {
+      ...existingAttributes
+    };
+
+    for (const key of Object.keys(updatedAttributes)) {
+      if (updatedAttributes[key] !== undefined) {
+        workerAttributes[key] = updatedAttributes[key]
+      }
+    }
 
     try {
       await client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
@@ -257,6 +286,20 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
           attributes: JSON.stringify(workerAttributes)
         });
       console.log('Updated worker', friendlyName);
+
+      if (dateLeft) {
+        await client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
+          .workers(existingWorker.sid)
+          .update({
+            activitySid: process.env.TEMP_ACTIVITY_SID
+          });
+        await client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
+          .workers(existingWorker.sid)
+          .update({
+            activitySid: process.env.OFFLINE_ACTIVITY_SID
+          });
+        console.log('Flipped activity for terminated worker,', friendlyName);
+      }
     } catch (error) {
       switch (error.code) {
         case 20001:
