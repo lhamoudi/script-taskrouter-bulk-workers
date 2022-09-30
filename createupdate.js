@@ -1,20 +1,24 @@
 require('dotenv').config();
 const fs = require('fs');
 const csv = require('csv-parser');
-const client = require('twilio')(
-  process.env.ACCOUNT_SID,
-  process.env.AUTH_TOKEN
-);
+const Twilio = require('twilio');
 
-async function sleep(milliseconds) { 
-  return new Promise(resolve => setTimeout(resolve, milliseconds))
-};
+const { log } = require('./helpers/logger');
+const { confirmTargetAccount, confirmToProceed } = require('./helpers/utils');
 
-function isArraysEqual(a, b) {
-  return Array.isArray(a)
-    && Array.isArray(b)
-    && a.length === b.length
-    && a.every((val) => b.includes(val));
+const {
+  ACCOUNT_SID,
+  AUTH_TOKEN,
+  OFFLINE_ACTIVITY_SID,
+  TEMP_ACTIVITY_SID,
+  TR_WORKSPACE_SID,
+} = process.env;
+
+const client = Twilio(ACCOUNT_SID, AUTH_TOKEN);
+
+function isPrimitiveEqual(a, b) {
+  // Considering anything falsy as equal
+  return !a && !b ? true : a === b;
 }
 
 function escapeNonAlphaChars(stringToEscape, prefix = '_') {
@@ -30,12 +34,12 @@ function generateContactUri(friendlyName) {
 }
 
 async function getExistingWorkers() {//Go get existing Workers
-  console.log('Fetching all existing workers');
-  client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
+  log.info('Fetching all existing workers');
+  client.taskrouter.workspaces(TR_WORKSPACE_SID)
     .workers
     .list({ pageSize: 1000 })
     .then(workers => {
-      console.log('Workers fetched. Loading CSV');
+      log.info('Workers fetched. Loading CSV');
       loadCSV(workers)
     });
 }
@@ -51,19 +55,6 @@ function loadCSV(existingWorkers) { //Let's load the CSV
       sortWorkersToLoad(workersToLoad, existingWorkers);
     });
 }
-
-// async function sortWorkers(workers) {
-//   let existingWorkers = workers; //Build Array for the existing Workers
-
-//   // for (let i = 0; i < taskQueues.length; i++) {
-//   //   let singleQueue = {}
-//   //   let name = taskQueues[i].friendlyName
-//   //   singleQueue[name] = taskQueues[i].sid
-//   //   existingWorkers.push(singleQueue)
-//   // }
-
-//   loadCSV(existingWorkers)
-// }
 
 async function sortWorkersToLoad(workersToLoad, existingWorkers) {
   const existingWorkerNames = existingWorkers.map(w => w.friendlyName);
@@ -87,7 +78,11 @@ async function sortWorkersToLoad(workersToLoad, existingWorkers) {
     }
   }
 
-  console.log("List loaded, we have", workersToCreate.length, "new Workers and", workersToUpdate.length, "Workers to update");
+  const confirmationMessage = ("List loaded, we have " + workersToCreate.length + " new Workers and " + workersToUpdate.length + " Workers to update");
+  let isConfirmed = await confirmToProceed(confirmationMessage);
+  if (!isConfirmed) {
+    return;
+  }
   //filterQueues(workersToUpdate, workersToCreate, workersToLoad, existingWorkers)
   await createWorkers(workersToCreate, workersToLoad);
   await updateWorkers(workersToUpdate, workersToLoad, existingWorkers);
@@ -107,26 +102,9 @@ async function createWorkers(workersToCreate, workersToLoad) {
       full_name,
       location,
       manager,
-      skills,
       team_id,
       team_name
     } = worker;
-
-    let routing;
-
-    if (skills) {
-      routing = {
-        skills: [],
-        levels: {}
-      };
-
-      const skillsArray = skills.split(',');
-
-      for (const skill of skillsArray) {
-        routing.skills.push(skill);
-        routing.levels[skill] = 1
-      }
-    }
 
     const dateJoined = isNaN(parseInt(date_joined))
       ? undefined
@@ -145,29 +123,28 @@ async function createWorkers(workersToCreate, workersToLoad) {
       full_name,
       location,
       manager,
-      routing,
       team_id,
       team_name
     };
 
     try {
-      await client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
+      await client.taskrouter.workspaces(TR_WORKSPACE_SID)
         .workers
         .create({
           friendlyName,
           attributes: JSON.stringify(workerAttributes)
         });
-      console.log('Created worker', friendlyName);
+      log.info(`Created worker ${friendlyName} with attributes ${JSON.stringify(workerAttributes)}`);
     } catch (error) {
       switch (error.code) {
         case 20001:
-          console.log(friendlyName, "exists", JSON.stringify(error));
+          log.error(`${friendlyName} exists. ${JSON.stringify(error)}`);
           break;
         case 20429:
-          console.log("Throttling, too many requests", JSON.stringify(error));
+          log.error(`Throttling, too many requests. ${JSON.stringify(error)}`);
           break;
         default:
-          console.log(JSON.stringify(error));
+          log.error(JSON.stringify(error));
       }
     }
   }
@@ -181,9 +158,6 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const existingWorker = existingWorkers.find(ew => ew.friendlyName === w.friendlyName);
     const existingAttributes = JSON.parse(existingWorker.attributes);
 
-    const existingSkills = existingAttributes.routing && existingAttributes.routing.skills;
-    const newSkills = w.skills && w.skills.split(',');
-
     const dateJoined = isNaN(parseInt(w.date_joined))
       ? undefined
       : parseInt(w.date_joined);
@@ -191,24 +165,24 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
     const dateLeft = isNaN(parseInt(w.date_left))
       ? undefined
       : parseInt(w.date_left);
-
-    return (w.agent_attribute_1 && existingAttributes.agent_attribute_1 !== w.agent_attribute_1
-      || dateJoined && existingAttributes.date_joined !== dateJoined
-      || dateLeft && existingAttributes.date_left !== dateLeft
-      || w.email && existingAttributes.email !== w.email
-      || w.full_name && existingAttributes.full_name !== w.full_name
-      || w.location && existingAttributes.location !== w.location
-      || w.manager && existingAttributes.manager !== w.manager
-      || newSkills && !isArraysEqual(existingSkills, newSkills)
-      || w.team_id && existingAttributes.team_id !== w.team_id
-      || w.team_name && existingAttributes.team_name !== w.team_name
+    
+    // If any one of the CSV attributes differ from the matching worker attribute, the worker will be updated
+    return (!isPrimitiveEqual(w.agent_attribute_1, existingAttributes.agent_attribute_1)
+      || !isPrimitiveEqual(dateJoined, existingAttributes.date_joined)
+      || !isPrimitiveEqual(dateLeft, existingAttributes.date_left)
+      || !isPrimitiveEqual(w.email, existingAttributes.email)
+      || !isPrimitiveEqual(w.full_name, existingAttributes.full_name)
+      || !isPrimitiveEqual(w.location, existingAttributes.location)
+      || !isPrimitiveEqual(w.manager, existingAttributes.manager)
+      || !isPrimitiveEqual(w.team_id, existingAttributes.team_id)
+      || !isPrimitiveEqual(w.team_name, existingAttributes.team_name)
     );
   });
 
-  console.log("Of the workers to update, there are", filteredWorkers.length, "with changed attributes");
+  log.info(`Of the workers to update, there are ${filteredWorkers.length} with changed attributes`);
 
   if (filteredWorkers.length === 0) {
-    console.log('No worker updates are required');
+    log.info('No worker updates are required');
     return;
   }
 
@@ -223,33 +197,16 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
       full_name,
       location,
       manager,
-      skills,
       team_id,
       team_name
     } = worker;
 
-    let routing;
-
-    if (skills) {
-      routing = {
-        skills: [],
-        levels: {}
-      };
-
-      const skillsArray = skills.split(',');
-
-      for (const skill of skillsArray) {
-        routing.skills.push(skill);
-        routing.levels[skill] = 1
-      }
-    }
-
     const dateJoined = isNaN(parseInt(date_joined))
-      ? undefined
+      ? ""
       : parseInt(date_joined);
 
     const dateLeft = isNaN(parseInt(date_left))
-      ? undefined
+      ? ""
       : parseInt(date_left);
     
     const existingWorker = existingWorkers.find(w => w.friendlyName === friendlyName);
@@ -263,8 +220,6 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
       full_name,
       location,
       manager,
-      routing,
-      state: dateLeft && 'Deleted',
       team_id,
       team_name
     };
@@ -277,43 +232,60 @@ async function updateWorkers(workersToUpdate, workersToLoad, existingWorkers) {
       if (updatedAttributes[key] !== undefined) {
         workerAttributes[key] = updatedAttributes[key]
       }
+      if (workerAttributes[key] === "") {
+        // Ensuring attributes aren't set with empty strings since this can
+        // cause issues with some Flex TeamsView filter logic
+        delete workerAttributes[key]
+      }
     }
 
     try {
-      await client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
+      await client.taskrouter.workspaces(TR_WORKSPACE_SID)
         .workers(existingWorker.sid)
         .update({
           attributes: JSON.stringify(workerAttributes)
         });
-      console.log('Updated worker', friendlyName);
+      log.info(`Updated worker ${friendlyName} with attributes ${JSON.stringify(workerAttributes)}`);
 
       if (dateLeft) {
-        await client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
+        // Assuming this is a worker that will not login to Flex again, and since an 
+        // activity change is required for Flex Insights to receive the updated attributes,
+        // performing that activity change here to ensure Flex Insights gets the updates
+        await client.taskrouter.workspaces(TR_WORKSPACE_SID)
           .workers(existingWorker.sid)
           .update({
-            activitySid: process.env.TEMP_ACTIVITY_SID
+            activitySid: TEMP_ACTIVITY_SID
           });
-        await client.taskrouter.workspaces(process.env.TR_WORKSPACE_SID)
+        await client.taskrouter.workspaces(TR_WORKSPACE_SID)
           .workers(existingWorker.sid)
           .update({
-            activitySid: process.env.OFFLINE_ACTIVITY_SID
+            activitySid: OFFLINE_ACTIVITY_SID
           });
-        console.log('Flipped activity for terminated worker,', friendlyName);
+        log.info(`Flipped activity for terminated worker ${friendlyName}`);
       }
     } catch (error) {
       switch (error.code) {
         case 20001:
-          console.log(friendlyName, "exists", JSON.stringify(error));
+          log.error(`${friendlyName} exists. ${JSON.stringify(error)}`);
           break;
         case 20429:
-          console.log("Throttling, too many requests", JSON.stringify(error));
+          log.error(`Error updating ${friendlyName}. Throttling, too many requests. ${JSON.stringify(error)}`);
           break;
         default:
-          console.log(JSON.stringify(error));
+          log.error(`Error updating ${friendlyName}. ${JSON.stringify(error)}`);
       }
     }
   }
 }
 
+async function runScript() {
+  let isConfirmed = await confirmTargetAccount(client);
+  if (!isConfirmed) {
+    return;
+  }
+
+  getExistingWorkers();
+}
+
 // Starting script
-getExistingWorkers();
+runScript();
