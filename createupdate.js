@@ -22,6 +22,8 @@ function isPrimitiveEqual(a, b) {
 }
 
 function escapeNonAlphaChars(stringToEscape, prefix = '_') {
+  // This logic attempts to match the Flex UI native code that transforms the worker's
+  // username (friendlyName) to the Voice Client ID it registers with
   const escaped = stringToEscape.replace(/[^A-Za-z0-9]/g, function(match) {
       const hex = match.charCodeAt(0).toString(16).toUpperCase();
       return prefix + (hex.length < 2 ? '0' + hex : hex);
