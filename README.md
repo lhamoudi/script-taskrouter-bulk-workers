@@ -29,7 +29,7 @@ Please see the [`import-sample.csv`](import-sample.csv) file for an example CSV 
 To run the script, simply use the command:
 
 ```bash
-node index.js {filename}.csv
+node createupdate.js {filename}.csv
 ```
 
 Replace the curly bracket values with the input CSV filename.
