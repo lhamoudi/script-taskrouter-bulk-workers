@@ -136,7 +136,11 @@ async function createWorkers() {
       location,
       manager,
       team_id,
-      team_name
+      team_name,
+      department_id,
+      department_name,
+      extension,
+      configuredCallerId,
     } = worker;
 
     const dateJoined = isNaN(parseInt(date_joined))
@@ -158,6 +162,10 @@ async function createWorkers() {
       manager,
       team_id,
       team_name,
+      department_id,
+      department_name,
+      extension,
+      configuredCallerId,
       routing: {
         skills: [],
         levels: {}
@@ -248,6 +256,10 @@ async function updateWorkers() {
       || !isPrimitiveEqual(w.manager, existingAttributes.manager)
       || !isPrimitiveEqual(w.team_id, existingAttributes.team_id)
       || !isPrimitiveEqual(w.team_name, existingAttributes.team_name)
+      || !isPrimitiveEqual(w.department_id, existingAttributes.department_id)
+      || !isPrimitiveEqual(w.department_name, existingAttributes.department_name)
+      || !isPrimitiveEqual(w.extension, existingAttributes.extension)
+      || !isPrimitiveEqual(w.configuredCallerId, existingAttributes.configuredCallerId)
     );
   });
 
@@ -270,7 +282,11 @@ async function updateWorkers() {
       location,
       manager,
       team_id,
-      team_name
+      team_name,
+      department_id,
+      department_name,
+      extension,
+      configuredCallerId,
     } = worker;
 
     const dateJoined = isNaN(parseInt(date_joined))
@@ -294,6 +310,10 @@ async function updateWorkers() {
       manager,
       team_id,
       team_name,
+      department_id,
+      department_name,
+      extension,
+      configuredCallerId,
     };
 
     const workerAttributes = {
