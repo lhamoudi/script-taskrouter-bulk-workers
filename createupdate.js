@@ -222,8 +222,8 @@ async function updateWorkers() {
     
     if (workerSkillsFile) {
       // Get the workers existing skills
-      const existingSkills = existingAttributes.routing.skills;
-      const existingLevels = existingAttributes.routing.levels;
+      const existingSkills = existingAttributes.routing?.skills || [];
+      const existingLevels = existingAttributes.routing?.levels || {};
 
       // Get the workers new skills
       const newSkills = workerSkills[w.email]?.skills;
